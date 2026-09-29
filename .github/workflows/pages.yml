@@ -31,11 +31,18 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v6
 
+      - name: Подготовить файлы сайта
+        run: |
+          mkdir -p _site
+          cp index.html styles.css app.js sync.js _site/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
           # Приложение статическое и собирать нечего: публикуем файлы как есть.
-          path: '.'
+          # Копируем выборочно, чтобы на сайт не попали исходники Worker,
+          # README и служебные файлы репозитория.
+          path: '_site'
 
       - name: Deploy to GitHub Pages
         id: deployment

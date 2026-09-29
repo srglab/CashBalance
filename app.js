@@ -264,6 +264,9 @@ function normalizeRecord(raw) {
       ? [...new Set(raw.weekdays.map(Number).filter((d) => d >= 1 && d <= 7))].sort()
       : [],
     end: /^\d{4}-\d{2}-\d{2}$/.test(raw.end || '') ? raw.end : null,
+    /* rev — счётчик изменений для синхронизации. В данных из ранних
+       версий его нет, поэтому считаем, что запись менялась один раз. */
+    rev: Math.max(1, Math.floor(Number(raw.rev)) || 1),
   };
 }
 
@@ -286,7 +289,9 @@ function invalidateCaches() {
   carryCache.clear();
 }
 
-function save() {
+/* changedIds — какие операции изменились. Синхронизации нужно знать это
+   точно: если пометить весь учёт, каждое сохранение отправляло бы его целиком. */
+function save(changedIds = []) {
   invalidateCaches();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.transactions));
@@ -294,6 +299,9 @@ function save() {
     console.error('Не удалось сохранить данные:', err);
     toast('Не удалось сохранить данные в браузере');
   }
+  /* Синхронизация фоновая: если её нет или сервер недоступен,
+     учёт уже записан в localStorage и ничего не теряется. */
+  if (typeof Sync !== 'undefined' && Sync.isOn()) Sync.markDirty(changedIds);
 }
 
 /* ---------- накопленный баланс ---------- */
@@ -892,6 +900,9 @@ function onSubmit(event) {
     repeatEvery: Math.min(365, Math.max(1, Number($('repeatEvery').value) || 1)),
     weekdays: repeat === 'weekly' ? getWeekdays() : [],
     end: repeat === 'none' ? null : end,
+    /* Правка поднимает счётчик: по нему другие устройства поймут,
+       что их версия устарела. Новая запись начинается с единицы. */
+    rev: existing ? (existing.rev || 1) + 1 : 1,
   };
 
   if (!payload.weekdays.length && repeat === 'weekly') {
@@ -900,11 +911,12 @@ function onSubmit(event) {
 
   if (existing) {
     Object.assign(existing, payload);
+    save([existing.id]);
   } else {
-    state.transactions.push({ id: uid(), ...payload });
+    const created = { id: uid(), ...payload };
+    state.transactions.push(created);
+    save([created.id]);
   }
-
-  save();
 
   /* Если операцию перенесли в другой месяц — показываем тот месяц. */
   if (start.slice(0, 7) !== state.month) {
@@ -947,6 +959,9 @@ function importData(file) {
       const parsed = JSON.parse(String(reader.result));
       if (!Array.isArray(parsed)) throw new Error('Ожидался список операций');
       const cleaned = parsed.map(normalizeRecord).filter(Boolean);
+      /* Замена целиком: сервер должен узнать и о прежнем учёте, и о новом,
+         иначе он вернёт то, что пользователь только что затёр импортом. */
+      if (typeof Sync !== 'undefined') Sync.replaceAll(cleaned);
       state.transactions = cleaned;
       save();
       render();
@@ -967,6 +982,9 @@ function clearAll() {
   }
   const count = state.transactions.length;
   if (!confirm(`Удалить все операции (${count} шт.)? Действие необратимо.`)) return;
+  /* Просто забыть операции мало: сервер обязан узнать об удалении,
+     иначе вернёт их при следующем обмене. */
+  if (typeof Sync !== 'undefined') Sync.replaceAll([]);
   state.transactions = [];
   save();
   render();
@@ -1053,8 +1071,12 @@ function removeTx(id) {
 
   if (!confirm(question)) return;
 
+  /* Удаление не выбрасывает запись, а помечает её: иначе на других
+     устройствах она просто появится снова при следующей синхронизации. */
+  if (typeof Sync !== 'undefined') Sync.retire(tx);
+
   state.transactions = state.transactions.filter((t) => t.id !== id);
-  save();
+  save([id]);
   render();
   toast('Операция удалена');
 }
@@ -1118,6 +1140,89 @@ function init() {
 
   render();
   resetForm();
+  setupSync();
+}
+
+/* ---------- синхронизация ---------- */
+
+const SYNC_LABELS = {
+  off: 'Синхронизация выключена',
+  busy: 'Синхронизация: идёт обмен',
+  on: 'Синхронизация: всё сведено',
+  error: 'Синхронизация: ошибка',
+};
+
+let syncWired = false;
+
+function renderSyncStatus({ status, error }) {
+  const label = $('syncLabel');
+  if (!label) return;
+
+  label.textContent = SYNC_LABELS[status] || SYNC_LABELS.off;
+  $('syncBtn').dataset.state = status;
+  $('syncBtn').title = error ? `${SYNC_LABELS[status]}: ${error}` : SYNC_LABELS[status] || '';
+}
+
+async function setupSync() {
+  /* Обработчики навешиваются один раз: init() идёт по DOMContentLoaded,
+     но вдруг его вызовут ещё раз — иначе начнут копиться подписки. */
+  if (typeof Sync === 'undefined' || syncWired) return;
+  syncWired = true;
+
+  Sync.onChange(renderSyncStatus);
+
+  $('syncBtn').addEventListener('click', () => openSyncDialog());
+  $('syncCancel').addEventListener('click', () => $('syncDialog').close());
+  $('syncDisconnect').addEventListener('click', () => {
+    Sync.disconnect();
+    $('syncDialog').close();
+    toast('Синхронизация отключена');
+  });
+  $('syncConnect').addEventListener('click', async () => {
+    const url = $('syncUrl').value.trim();
+    const password = $('syncPassword').value;
+    $('syncError').hidden = true;
+    $('syncConnect').disabled = true;
+
+    try {
+      const changed = await Sync.connect(url, password);
+      save();
+      render();
+      $('syncDialog').close();
+      toast(changed ? 'Данные получены с сервера' : 'Синхронизация включена');
+    } catch (err) {
+      $('syncError').textContent = err.message || String(err);
+      $('syncError').hidden = false;
+    } finally {
+      $('syncConnect').disabled = false;
+      $('syncPassword').value = '';
+    }
+  });
+
+  await Sync.boot();
+
+  /* Первая загрузка из сети меняет весь календарь, поэтому перерисовываем. */
+  const changed = await Sync.run();
+  if (changed) {
+    invalidateCaches();
+    render();
+  }
+}
+
+function openSyncDialog() {
+  const on = typeof Sync !== 'undefined' && Sync.isOn();
+  const cfg = typeof Sync !== 'undefined' ? Sync.configForUi() : null;
+
+  $('syncUrl').value = cfg ? cfg.url : '';
+  $('syncPassField').hidden = on;
+  $('syncConnect').hidden = on;
+  $('syncDisconnect').hidden = !on;
+  $('syncError').hidden = true;
+  $('syncDialogText').textContent = on
+    ? 'Операции хранятся на сервере и появляются на всех устройствах.'
+    : 'Введите адрес Worker и пароль. Данные уедут с устройства на ваш сервер.';
+
+  $('syncDialog').showModal();
 }
 
 document.addEventListener('DOMContentLoaded', init);

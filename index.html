@@ -12,6 +12,10 @@
   <h1>Личный бюджет</h1>
   <div class="topbar__actions">
     <button type="button" class="btn btn--ghost" id="todayBtn">Сегодня</button>
+    <button type="button" class="btn btn--ghost" id="syncBtn" data-state="off" title="Синхронизация между устройствами">
+      <span class="sync-dot" aria-hidden="true"></span>
+      <span id="syncLabel">Синхронизация</span>
+    </button>
     <button type="button" class="btn btn--ghost" id="exportBtn">Экспорт</button>
     <button type="button" class="btn btn--ghost" id="importBtn">Импорт</button>
     <input type="file" id="importFile" accept="application/json" hidden>
@@ -177,6 +181,31 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+<!-- ---------- подключение синхронизации ---------- -->
+<dialog id="syncDialog" class="dialog" aria-labelledby="syncDialogTitle">
+  <h2 class="dialog__title" id="syncDialogTitle">Синхронизация</h2>
+  <p class="dialog__text" id="syncDialogText"></p>
+
+  <label class="field">
+    <span class="field__label">Адрес сервера</span>
+    <input type="url" id="syncUrl" placeholder="https://cashbalance-sync.workers.dev" autocomplete="off">
+  </label>
+
+  <label class="field" id="syncPassField">
+    <span class="field__label">Пароль</span>
+    <input type="password" id="syncPassword" autocomplete="current-password">
+  </label>
+
+  <p class="dialog__error" id="syncError" role="alert" hidden></p>
+
+  <div class="dialog__actions">
+    <button type="button" class="btn btn--ghost" id="syncCancel">Закрыть</button>
+    <button type="button" class="btn btn--primary" id="syncConnect">Подключить</button>
+    <button type="button" class="btn btn--danger-ghost" id="syncDisconnect" hidden>Отключить</button>
+  </div>
+</dialog>
+
 <script src="app.js"></script>
+<script src="sync.js"></script>
 </body>
 </html>

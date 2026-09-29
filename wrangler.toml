@@ -1,0 +1,14 @@
+name = "cashbalance-sync"
+main = "worker/src/index.js"
+compatibility_date = "2025-01-01"
+
+# Создайте базу: wrangler d1 create cashbalance
+# и впишите её database_id сюда.
+[[d1_databases]]
+binding = "DB"
+database_name = "cashbalance"
+database_id = "ЗАПОЛНИТЕ_ПОСЛЕ_d1_create"
+
+# Секреты задаются только так, в репозиторий они не попадают:
+#   wrangler secret put BUDGET_PASSWORD
+#   wrangler secret put SESSION_SECRET
