@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Личный бюджет</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Личный бюджет</h1>
+  <div class="topbar__actions">
+    <button type="button" class="btn btn--ghost" id="todayBtn">Сегодня</button>
+    <button type="button" class="btn btn--ghost" id="exportBtn">Экспорт</button>
+    <button type="button" class="btn btn--ghost" id="importBtn">Импорт</button>
+    <input type="file" id="importFile" accept="application/json" hidden>
+    <button type="button" class="btn btn--danger-ghost" id="clearBtn">Очистить всё</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <section class="summary" aria-label="Итоги за месяц">
+    <div class="monthnav">
+      <button type="button" class="btn btn--icon" id="prevMonth" title="Предыдущий месяц" aria-label="Предыдущий месяц">&#8592;</button>
+      <div class="monthnav__label">
+        <span id="monthTitle">—</span>
+        <small id="monthCount"></small>
+      </div>
+      <button type="button" class="btn btn--icon" id="nextMonth" title="Следующий месяц" aria-label="Следующий месяц">&#8594;</button>
+    </div>
+
+    <div class="chips">
+      <div class="chip chip--income">
+        <span class="chip__label">Приход</span>
+        <strong class="chip__value" id="sumIncome">0 ₽</strong>
+      </div>
+      <div class="chip chip--expense">
+        <span class="chip__label">Расход</span>
+        <strong class="chip__value" id="sumExpense">0 ₽</strong>
+      </div>
+      <div class="chip chip--balance">
+        <span class="chip__label">Баланс</span>
+        <strong class="chip__value" id="sumBalance">0 ₽</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel panel--calendar" aria-label="Календарь">
+    <div class="cal-scroll">
+      <div class="cal-weekdays" aria-hidden="true">
+        <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+      </div>
+      <div id="calendar" class="calendar"></div>
+    </div>
+    <p class="legend">
+      <span class="legend__item legend__item--in">приход за день</span>
+      <span class="legend__item legend__item--out">расход за день</span>
+      <span class="legend__item legend__item--bal">накопленный итог на конец дня</span>
+      <span class="legend__hint">нажмите на день, чтобы открыть его</span>
+    </p>
+  </section>
+
+  <section class="panel" aria-label="Расходы по категориям">
+    <h2 class="panel__title">Расходы по категориям</h2>
+    <div id="breakdown" class="breakdown"></div>
+  </section>
+
+  <section class="panel" aria-label="Динамика за 6 месяцев">
+    <h2 class="panel__title">Динамика за 6 месяцев</h2>
+    <div id="trend" class="trend"></div>
+  </section>
+
+</main>
+
+<!-- ---------- панель выбранного дня ---------- -->
+<div id="backdrop" class="backdrop" hidden></div>
+
+<aside id="dayPanel" class="drawer" hidden aria-labelledby="dayTitle">
+  <header class="drawer__head">
+    <button type="button" class="btn btn--icon" id="closePanel" title="Закрыть" aria-label="Закрыть">&times;</button>
+    <div>
+      <h2 class="drawer__title" id="dayTitle">—</h2>
+      <small class="drawer__sub" id="daySub"></small>
+    </div>
+    <div class="drawer__stats">
+      <span class="dstat dstat--income" id="dayIncome">0 ₽</span>
+      <span class="dstat dstat--expense" id="dayExpense">0 ₽</span>
+      <span class="dstat dstat--balance" id="dayBalance">0 ₽</span>
+      <span class="dstat dstat--cumulative" id="dayCumulative">0 ₽</span>
+    </div>
+  </header>
+
+  <div class="drawer__body">
+    <div id="dayList" class="list"></div>
+
+    <form id="txForm" class="form" autocomplete="off">
+      <input type="hidden" id="editId">
+
+      <h3 class="form__title" id="formTitle">Новая операция</h3>
+      <p class="form__hint" id="formHint" hidden></p>
+
+      <div class="field field--wide">
+        <span class="field__label">Тип</span>
+        <div class="segmented" role="radiogroup" aria-label="Тип операции">
+          <label class="segmented__item">
+            <input type="radio" name="type" value="expense" checked>
+            <span>Расход</span>
+          </label>
+          <label class="segmented__item">
+            <input type="radio" name="type" value="income">
+            <span>Доход</span>
+          </label>
+        </div>
+      </div>
+
+      <label class="field">
+        <span class="field__label">Сумма, ₽</span>
+        <input type="number" id="amount" step="0.01" min="0.01" placeholder="0" required>
+      </label>
+
+      <label class="field">
+        <span class="field__label">Категория</span>
+        <select id="category" required></select>
+      </label>
+
+      <label class="field field--wide">
+        <span class="field__label">Заметка</span>
+        <input type="text" id="note" maxlength="80" placeholder="Необязательно">
+      </label>
+
+      <label class="field field--wide">
+        <span class="field__label">Повторение</span>
+        <select id="repeat">
+          <option value="none">Не повторять</option>
+          <option value="daily">Каждый день</option>
+          <option value="weekly">Каждую неделю</option>
+          <option value="monthly">Каждый месяц</option>
+        </select>
+      </label>
+
+      <label class="field" id="everyField" hidden>
+        <span class="field__label">Повторять каждые</span>
+        <input type="number" id="repeatEvery" min="1" max="365" step="1" value="1">
+        <small class="field__help" id="everyHelp"></small>
+      </label>
+
+      <div class="field field--wide" id="weekdaysField" hidden>
+        <span class="field__label">Дни недели</span>
+        <div class="weekdays" id="weekdayPicker"></div>
+      </div>
+
+      <label class="field field--wide" id="untilField" hidden>
+        <span class="field__label">Повторять до (необязательно)</span>
+        <input type="date" id="untilDate">
+      </label>
+
+      <div class="form__actions">
+        <button type="submit" class="btn btn--primary" id="submitBtn">Добавить</button>
+        <button type="button" class="btn btn--ghost" id="cancelBtn" hidden>Отмена</button>
+      </div>
+    </form>
+  </div>
+</aside>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
