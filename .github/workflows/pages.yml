@@ -1,0 +1,42 @@
+name: Deploy to GitHub Pages
+
+# Каждый пуш в main публикует приложение заново.
+# Запуск можно также повторить вручную: вкладка Actions -> Deploy to GitHub Pages -> Run workflow.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read   # прочитать репозиторий
+  pages: write     # задеплоить сайт
+  id-token: write  # подтвердить, что деплой запущен именно этим workflow
+
+# Одновременные деплои не нужны: если во время текущего встал в очередь следующий,
+# ждём окончания текущего и публикуем самый свежий.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          # Приложение статическое и собирать нечего: публикуем файлы как есть.
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
