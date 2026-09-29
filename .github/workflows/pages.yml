@@ -28,6 +28,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Публикуем только то, что прошло проверки: сломанный пуш не должен
+      # оказываться на живом сайте.
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Проверки
+        run: node tests/run.js
+
       - name: Setup Pages
         uses: actions/configure-pages@v6
 
