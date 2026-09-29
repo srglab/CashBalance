@@ -2,6 +2,8 @@
    Данные хранятся в localStorage браузера. */
 
 const STORAGE_KEY = 'pb.transactions.v2';
+const EXPORT_STAMP_KEY = 'pb.lastExport';
+const BACKUP_INTERVAL_DAYS = 30;
 const DAY_MS = 86400000;
 
 const EXPENSE_CATEGORIES = [
@@ -707,10 +709,8 @@ function renderNoteSuggestions() {
 }
 
 function closeNoteSuggestions() {
-  const list = $('noteList');
-  if (!list) return;
-  list.hidden = true;
-  list.innerHTML = '';
+  $('noteList').hidden = true;
+  $('noteList').innerHTML = '';
   noteActive = -1;
   $('note').setAttribute('aria-expanded', 'false');
 }
@@ -929,6 +929,14 @@ function exportData() {
   link.download = `budget-${todayISO()}.json`;
   link.click();
   URL.revokeObjectURL(url);
+
+  try {
+    localStorage.setItem(EXPORT_STAMP_KEY, String(Date.now()));
+  } catch (err) {
+    /* отметку о копии можно и не сохранить — это не влияет на данные */
+  }
+
+  renderBackupNotice();
   toast('Файл с данными сохранён');
 }
 
@@ -965,6 +973,31 @@ function clearAll() {
   toast('Все операции удалены');
 }
 
+/* ---------- напоминание о резервной копии ---------- */
+
+/* Данные лежат только в этом браузере, поэтому единственная страховка от их
+   потери — файл копии. Напоминание появляется, пока копия не выгружена. */
+function lastExportAt() {
+  return Number(localStorage.getItem(EXPORT_STAMP_KEY) || 0) || null;
+}
+
+function renderBackupNotice() {
+  /* Пустой учёт напоминать не о чем. */
+  if (!state.transactions.length) {
+    $('backupNotice').hidden = true;
+    return;
+  }
+
+  const stamp = lastExportAt();
+  const days = stamp ? Math.floor((Date.now() - stamp) / DAY_MS) : null;
+
+  $('backupNotice').hidden = days !== null && days < BACKUP_INTERVAL_DAYS;
+  $('backupNoticeText').textContent = days === null
+    ? 'Данные хранятся только в этом браузере — стоит выгрузить резервную копию.'
+    : `Резервная копия не выгружалась ${days} ${plural(days, 'день', 'дня', 'дней')}. `
+      + 'Данные хранятся только в этом браузере.';
+}
+
 /* ---------- общее ---------- */
 
 function render() {
@@ -973,6 +1006,7 @@ function render() {
   renderBreakdown();
   renderTrend();
   updateNoteHelp();
+  renderBackupNotice();
   if (state.selected) renderDayPanel();
 }
 
@@ -1074,6 +1108,7 @@ function init() {
   });
 
   $('exportBtn').addEventListener('click', exportData);
+  $('backupBtn').addEventListener('click', exportData);
   $('importBtn').addEventListener('click', () => $('importFile').click());
   $('importFile').addEventListener('change', (event) => {
     if (event.target.files[0]) importData(event.target.files[0]);

@@ -104,6 +104,23 @@ input, select, button { font: inherit; color: inherit; }
   flex: none;
 }
 
+/* напоминание о резервной копии */
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 14px;
+  background: var(--primary-soft);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.notice .btn { flex: none; }
+
 .btn--icon:hover { color: var(--text); border-color: var(--primary); }
 
 .icon-btn {
