@@ -125,10 +125,16 @@
         <select id="category" required></select>
       </label>
 
-      <label class="field field--wide">
-        <span class="field__label">Заметка</span>
-        <input type="text" id="note" maxlength="80" placeholder="Необязательно">
-      </label>
+      <div class="field field--wide">
+        <label class="field__label" for="note">Назначение</label>
+        <div class="combo">
+          <input type="text" id="note" maxlength="80" placeholder="Например, кофе навынос"
+                 autocomplete="off" role="combobox" aria-expanded="false"
+                 aria-controls="noteList" aria-autocomplete="list">
+          <ul id="noteList" class="combo__list" role="listbox" hidden></ul>
+        </div>
+        <small class="field__help" id="noteHelp"></small>
+      </div>
 
       <label class="field field--wide">
         <span class="field__label">Повторение</span>

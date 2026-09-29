@@ -6,6 +6,7 @@
   --muted: #7b849a;
   --primary: #3d5afe;
   --primary-dark: #2f47cc;
+  --primary-soft: rgba(61, 90, 254, .12);
   --income: #17a673;
   --expense: #e5484d;
   --shadow: 0 1px 2px rgba(20, 25, 45, .06), 0 8px 24px rgba(20, 25, 45, .06);
@@ -22,6 +23,7 @@
     --muted: #8e97ad;
     --primary: #6b83ff;
     --primary-dark: #5569e6;
+    --primary-soft: rgba(107, 131, 255, .18);
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .28);
   }
 }
@@ -458,6 +460,40 @@ input, select, button { font: inherit; color: inherit; }
 .field--wide, .form__actions { grid-column: 1 / -1; }
 .field__label { font-size: 12.5px; color: var(--muted); }
 .field__help { font-size: 11.5px; color: var(--muted); }
+
+/* поле назначения с выпадающим словарём */
+.combo { position: relative; }
+
+.combo__list {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 210px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15, 20, 40, .18);
+}
+
+.combo__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.combo__item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo__item small { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.combo__item[aria-selected="true"], .combo__item:hover { background: var(--primary-soft); }
 
 input[type="number"],
 input[type="text"],

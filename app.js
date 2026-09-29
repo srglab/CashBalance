@@ -646,6 +646,143 @@ function buildWeekdayPicker() {
     .join('');
 }
 
+/* ---------- словарь назначений ---------- */
+
+/* Собирается из заметок всех операций, отдельного хранилища не нужно.
+   Вместе с каждым значением хранится, сколько раз его использовали и
+   в операциях какого типа — по этому же типу подсказки встают вперёд. */
+function noteDictionary() {
+  const counts = new Map();
+
+  for (const tx of state.transactions) {
+    const note = String(tx.note || '').trim();
+    if (!note) continue;
+
+    const entry = counts.get(note) || { note, count: 0, types: new Set() };
+    entry.count += 1;
+    entry.types.add(tx.type);
+    counts.set(note, entry);
+  }
+
+  return [...counts.values()]
+    .sort((a, b) => b.count - a.count || a.note.localeCompare(b.note, 'ru'));
+}
+
+/* Подсказки для текущего ввода: совпадения по подстроке, сверху —
+   назначения того же типа операции, затем самые частые. */
+function noteSuggestions() {
+  const query = $('note').value.trim().toLowerCase();
+  const type = currentFormType();
+
+  return noteDictionary()
+    .filter((entry) => !query || entry.note.toLowerCase().includes(query))
+    .sort((a, b) => {
+      const own = (entry) => (entry.types.has(type) ? 0 : 1);
+      return own(a) - own(b) || b.count - a.count || a.note.localeCompare(b.note, 'ru');
+    });
+}
+
+const NOTE_LIMIT = 12;
+let noteActive = -1;
+
+function renderNoteSuggestions() {
+  const list = $('noteList');
+  const items = noteSuggestions().slice(0, NOTE_LIMIT);
+
+  if (!items.length) {
+    closeNoteSuggestions();
+    return;
+  }
+
+  list.innerHTML = items.map((entry) => `
+    <li class="combo__item" role="option" aria-selected="false"
+        data-note="${escapeHtml(entry.note)}">
+      <span>${escapeHtml(entry.note)}</span>
+      <small>${entry.count} ${plural(entry.count, 'раз', 'раза', 'раз')}</small>
+    </li>`).join('');
+
+  noteActive = -1;
+  list.hidden = false;
+  $('note').setAttribute('aria-expanded', 'true');
+}
+
+function closeNoteSuggestions() {
+  const list = $('noteList');
+  if (!list) return;
+  list.hidden = true;
+  list.innerHTML = '';
+  noteActive = -1;
+  $('note').setAttribute('aria-expanded', 'false');
+}
+
+function highlightNote(step) {
+  const items = [...$('noteList').querySelectorAll('.combo__item')];
+  if (!items.length) return;
+
+  items.forEach((item) => item.setAttribute('aria-selected', 'false'));
+  noteActive = (noteActive + step + items.length) % items.length;
+
+  const active = items[noteActive];
+  active.setAttribute('aria-selected', 'true');
+  active.scrollIntoView({ block: 'nearest' });
+}
+
+function pickNote(note) {
+  $('note').value = note;
+  closeNoteSuggestions();
+}
+
+function activeNoteValue() {
+  const item = $('noteList').querySelector('.combo__item[aria-selected="true"]');
+  return item ? item.dataset.note : null;
+}
+
+function updateNoteHelp() {
+  const total = noteDictionary().length;
+  $('noteHelp').textContent = total
+    ? `Подсказки из ${total} ${plural(total, 'прошлой записи', 'прошлых записей', 'прошлых записей')}`
+    : 'Подсказки появятся после первой записи с назначением';
+}
+
+function onNoteKeyDown(event) {
+  const open = !$('noteList').hidden;
+
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (!open) renderNoteSuggestions();
+    else highlightNote(event.key === 'ArrowDown' ? 1 : -1);
+    event.preventDefault();
+    return;
+  }
+
+  if (event.key === 'Enter' && open) {
+    const value = activeNoteValue();
+    /* без выделения Enter должен отправить форму, а не выбрать подсказку */
+    if (value !== null) {
+      event.preventDefault();
+      pickNote(value);
+    }
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    if (!open) return;
+    event.preventDefault();
+    /* гасим всплытие, иначе Esc закроет ещё и панель дня */
+    event.stopPropagation();
+    closeNoteSuggestions();
+  }
+}
+
+function onNoteListMouseDown(event) {
+  /* без этого поле теряет фокус раньше, чем сработает click */
+  event.preventDefault();
+}
+
+function onNoteListClick(event) {
+  const item = event.target.closest('.combo__item');
+  if (item) pickNote(item.dataset.note);
+}
+
 function syncRepeatFields() {
   const repeat = $('repeat').value;
   $('everyField').hidden = repeat === 'none';
@@ -688,6 +825,7 @@ function resetForm() {
   fillCategories();
   setWeekdays([]);
   syncRepeatFields();
+  closeNoteSuggestions();
   updateFormTitle();
 }
 
@@ -834,6 +972,7 @@ function render() {
   renderCalendar();
   renderBreakdown();
   renderTrend();
+  updateNoteHelp();
   if (state.selected) renderDayPanel();
 }
 
@@ -905,10 +1044,21 @@ function init() {
   document.addEventListener('keydown', onKeyDown);
 
   for (const radio of document.querySelectorAll('input[name="type"]')) {
-    radio.addEventListener('change', () => fillCategories());
+    radio.addEventListener('change', () => {
+      fillCategories();
+      /* подсказки назначений зависят от типа — пересобираем список */
+      if (!$('noteList').hidden) renderNoteSuggestions();
+    });
   }
 
   $('repeat').addEventListener('change', syncRepeatFields);
+
+  $('note').addEventListener('focus', renderNoteSuggestions);
+  $('note').addEventListener('input', renderNoteSuggestions);
+  $('note').addEventListener('blur', closeNoteSuggestions);
+  $('note').addEventListener('keydown', onNoteKeyDown);
+  $('noteList').addEventListener('mousedown', onNoteListMouseDown);
+  $('noteList').addEventListener('click', onNoteListClick);
   $('cancelBtn').addEventListener('click', () => {
     resetForm();
     toast('Изменение отменено');
